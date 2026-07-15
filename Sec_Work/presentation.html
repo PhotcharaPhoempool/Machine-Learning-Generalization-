@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>งานที่สอง — Bias/Variance ของตัวประมาณค่า E_out</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#181c2e; --panel2:#1f2438; --ink:#e8ecff; --muted:#9aa3c7;
+    --line:#2b3252; --accent:#7c9cff;
+    --resub:#ef5350; --holdout:#4caf7d; --kfold:#5b8def; --true:#e8ecff;
+    --good:#4caf7d; --warn:#e0b23a;
+    --mono:'JetBrains Mono',ui-monospace,'Consolas',monospace;
+    --sans:'Segoe UI','Noto Sans Thai',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       line-height:1.65;font-size:16px}
+  a{color:var(--accent)}
+  code,.mono{font-family:var(--mono)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* ---------- layout: sidebar TOC + content ---------- */
+  .layout{display:flex;gap:0}
+  nav.toc{position:sticky;top:0;align-self:flex-start;height:100vh;width:210px;
+          flex:0 0 210px;padding:22px 14px;border-right:1px solid var(--line);
+          overflow-y:auto;background:#0c0f1b}
+  nav.toc h4{font-size:12px;letter-spacing:.12em;color:var(--muted);margin:0 0 12px 6px;text-transform:uppercase}
+  nav.toc a{display:block;padding:8px 10px;border-radius:8px;color:var(--muted);
+            text-decoration:none;font-size:14px;border-left:2px solid transparent}
+  nav.toc a:hover{background:var(--panel);color:var(--ink)}
+  nav.toc a.active{color:var(--ink);background:var(--panel2);border-left-color:var(--accent)}
+  main{flex:1 1 auto;min-width:0}
+
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  section:last-child{border-bottom:none}
+  .tag{display:inline-block;font-family:var(--mono);font-size:12px;color:var(--accent);
+       background:rgba(124,156,255,.12);padding:3px 10px;border-radius:20px;letter-spacing:.05em}
+  h1{font-size:34px;line-height:1.25;margin:14px 0 8px}
+  h2{font-size:26px;margin:8px 0 6px}
+  h3{font-size:18px;margin:22px 0 8px;color:#c9d2ff}
+  p{margin:10px 0}
+  .lead{font-size:18px;color:#cdd4f5}
+  .muted{color:var(--muted)}
+  ul{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card h3{margin-top:0}
+  .eq{font-family:var(--mono);background:#0c0f1b;border:1px solid var(--line);
+      border-radius:10px;padding:12px 14px;color:#d7deff;overflow-x:auto;font-size:14px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:6px;font-size:13px;font-family:var(--mono)}
+  .p-resub{background:rgba(239,83,80,.16);color:#ff8a86}
+  .p-hold{background:rgba(76,175,125,.16);color:#71d3a3}
+  .p-kf{background:rgba(91,141,239,.18);color:#9cb8ff}
+
+  /* ---------- control panel ---------- */
+  .controls{position:sticky;top:0;z-index:20;background:rgba(16,18,32,.92);
+            backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 0}
+  .controls .wrap{display:flex;flex-wrap:wrap;gap:16px 20px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:4px;min-width:120px}
+  .ctrl label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+  .ctrl label b{color:var(--ink);font-family:var(--mono)}
+  input[type=range]{width:150px;accent-color:var(--accent)}
+  select,input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+          border-radius:8px;padding:6px 8px;font-family:var(--mono);font-size:13px}
+  .btn{background:var(--accent);color:#0c0f1b;border:none;border-radius:9px;padding:9px 16px;
+       font-weight:700;cursor:pointer;font-size:14px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.sec{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .btn:disabled{opacity:.5;cursor:wait}
+
+  /* ---------- tables ---------- */
+  .tbl-wrap{overflow-x:auto;margin:14px 0}
+  table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:13.5px}
+  th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
+  tbody tr:hover{background:var(--panel)}
+  td.neg{color:#ff8a86}td.pos{color:#71d3a3}
+
+  canvas{width:100%;height:auto;display:block}
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .chart-title{font-size:14px;color:#c9d2ff;margin:0 0 8px;font-weight:600}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-top:8px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+  .status{font-size:13px;color:var(--warn);font-family:var(--mono);min-height:18px}
+  .note{border-left:3px solid var(--accent);padding:8px 14px;background:var(--panel);
+        border-radius:0 8px 8px 0;margin:14px 0;color:#cdd4f5;font-size:14.5px}
+  .kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);
+       border-radius:5px;padding:1px 7px;font-size:12px}
+  .foot{padding:40px 0 80px;color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" id="toc">
+    <h4>สารบัญ</h4>
+    <a href="#intro">ภาพรวมโจทย์</a>
+    <a href="#concept">แนวคิดสำคัญ</a>
+    <a href="#part-a">(a) ข้อมูลชุดเดียว</a>
+    <a href="#part-b">(b) bias / variance</a>
+    <a href="#part-c">(c) เปลี่ยน ratio / k</a>
+    <a href="#part-d">(d) เปลี่ยน n / sigma</a>
+    <a href="#summary">สรุปบทเรียน</a>
+  </nav>
+
+  <main>
+    <!-- ===== control panel ===== -->
+    <div class="controls" id="panel">
+      <div class="wrap">
+        <div class="ctrl">
+          <label>ขนาดข้อมูล n <b id="lb-n">40</b></label>
+          <input type="range" id="c-n" min="6" max="120" step="1" value="40">
+        </div>
+        <div class="ctrl">
+          <label>noise σ <b id="lb-sig">0.30</b></label>
+          <input type="range" id="c-sig" min="0" max="1" step="0.05" value="0.3">
+        </div>
+        <div class="ctrl">
+          <label>holdout ratio <b id="lb-ratio">0.30</b></label>
+          <input type="range" id="c-ratio" min="0.1" max="0.8" step="0.05" value="0.3">
+        </div>
+        <div class="ctrl">
+          <label>k-fold <b id="lb-k">5</b></label>
+          <input type="range" id="c-k" min="2" max="20" step="1" value="5">
+        </div>
+        <div class="ctrl">
+          <label>ทำซ้ำ M ชุด <b id="lb-m">800</b></label>
+          <input type="range" id="c-m" min="200" max="3000" step="100" value="800">
+        </div>
+        <div class="ctrl">
+          <label for="c-seed">seed</label>
+          <input type="number" id="c-seed" value="42" style="width:80px">
+        </div>
+        <div class="ctrl" style="min-width:auto">
+          <label>&nbsp;</label>
+          <button class="btn" id="btn-run">▶ รันใหม่</button>
+        </div>
+        <div class="ctrl" style="min-width:auto">
+          <label>&nbsp;</label>
+          <button class="btn sec" id="btn-reset">คืนค่าเริ่มต้น</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <!-- ===== intro ===== -->
+      <section id="intro">
+        <span class="tag">งานที่สอง · Estimating E_out</span>
+        <h1>ความเอนเอียง (bias) และความแปรปรวน (variance)<br>ของ “ตัวประมาณค่า E_out” 3 แบบ</h1>
+        <p class="lead">จำลอง (simulation) เพื่อดูว่าแต่ละวิธีประมาณ error นอกกลุ่มตัวอย่างได้
+          <b>แม่น</b> (bias ต่ำ) และ <b>นิ่ง</b> (variance ต่ำ) แค่ไหน — ปรับค่าบนแถบด้านบนแล้วกราฟทั้งหน้าจะคำนวณใหม่สด ๆ</p>
+
+        <div class="grid3" style="margin-top:20px">
+          <div class="card">
+            <h3>ฟังก์ชันเป้าหมาย</h3>
+            <div class="eq">f(x) = sin(π·x)</div>
+            <p class="muted" style="font-size:14px">สุ่ม x ~ U[−1, 1] จำนวน n จุด<br>y = f(x) + noise,  noise ~ N(0, σ²)</p>
+          </div>
+          <div class="card">
+            <h3>แบบจำลอง 2 แบบ</h3>
+            <ul style="font-size:14.5px">
+              <li><b>constant</b> — เส้นแนวนอน h(x)=b (ค่าเฉลี่ยของ y)</li>
+              <li><b>linear</b> — เส้นตรง h(x)=a·x+b (least squares)</li>
+            </ul>
+            <p class="muted" style="font-size:13px">ดึงมาจากงานแรกผ่าน models.py</p>
+          </div>
+          <div class="card">
+            <h3>ตัวประมาณค่า E_out 3 แบบ</h3>
+            <ul style="font-size:14.5px">
+              <li><span class="pill p-resub">resub</span> วัด error บนข้อมูลที่เทรนไปแล้ว</li>
+              <li><span class="pill p-hold">holdout</span> แบ่ง train/test</li>
+              <li><span class="pill p-kf">k-fold</span> วนทดสอบ k ก้อนแล้วเฉลี่ย</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== concept ===== -->
+      <section id="concept">
+        <span class="tag">แนวคิดสำคัญ</span>
+        <h2>นิยามที่ใช้วัด “ความแม่น” ของตัวประมาณ</h2>
+        <div class="grid2">
+          <div class="card">
+            <h3>E_out จริง (ค่าอ้างอิง)</h3>
+            <div class="eq">E_out(D) = E<sub>x</sub>[ (g(x) − f(x))² ] + σ²</div>
+            <ul style="font-size:14.5px">
+              <li>พจน์แรก = error เฉลี่ยของโมเดลเทียบ f จริง (ประมาณด้วยกริดถี่ 1001 จุด)</li>
+              <li>พจน์ σ² = noise ที่ลดไม่ได้ (irreducible error)</li>
+              <li>ใช้โมเดลที่เทรนบน “ข้อมูลเต็มชุด” เป็นตัวอ้างอิง</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>bias / variance / MSE ของตัวประมาณ</h3>
+            <div class="eq">bias = mean(ค่าประมาณ) − mean(E_out จริง)
+variance = Var(ค่าประมาณ)
+MSE = mean( (ค่าประมาณ − E_out จริง)² ) ≈ bias² + variance</div>
+            <p style="font-size:14.5px" class="muted">คำนวณจากการทำซ้ำ M ชุดข้อมูล (Monte Carlo).
+              bias เป็นลบ = ประมาณต่ำเกินจริง (มองโลกแง่ดี)</p>
+          </div>
+        </div>
+        <div class="note">ทุกกราฟ/ตารางด้านล่างคำนวณด้วย JavaScript ในเบราว์เซอร์คุณเอง (พอร์ตตรง ๆ จาก
+          <code>perf_estimators.py</code>) — ไม่ต้องต่อเน็ต ปรับค่าแล้วเห็นผลทันที</div>
+      </section>
+
+      <!-- ===== part a ===== -->
+      <section id="part-a">
+        <span class="tag">หัวข้อ (a)</span>
+        <h2>ประมาณ E_out บนข้อมูล “ชุดเดียว”</h2>
+        <p class="muted">สุ่มข้อมูล 1 ชุดตามค่าที่ตั้งไว้ แล้วประมาณ E_out ด้วยทั้ง 3 วิธี เทียบกับ E_out จริง
+          — สังเกตว่า <span class="pill p-resub">resub</span> มักต่ำกว่าจริง ส่วน holdout/kfold ใกล้จริงกว่า</p>
+        <div class="grid2" style="margin-top:16px">
+          <div class="tbl-wrap card">
+            <table id="tbl-a">
+              <thead><tr><th>model</th><th>resub</th><th>holdout</th><th>kfold</th><th>E_out จริง</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="muted" style="font-size:13px;margin-top:12px">* ค่าจากข้อมูลสุ่มชุดเดียว จึงเหวี่ยงตาม seed — กด “รันใหม่” เพื่อสุ่มชุดใหม่</p>
+          </div>
+          <div class="chart-card">
+            <p class="chart-title">ชุดข้อมูล + เส้น f จริง + เส้นโมเดลที่ fit (model = linear)</p>
+            <canvas id="cv-a" width="600" height="380"></canvas>
+            <div class="legend">
+              <span><span class="swatch" style="background:var(--muted)"></span>ข้อมูล y</span>
+              <span><span class="swatch" style="background:var(--true)"></span>f(x)=sin(πx)</span>
+              <span><span class="swatch" style="background:var(--kfold)"></span>โมเดล linear</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== part b ===== -->
+      <section id="part-b">
+        <span class="tag">หัวข้อ (b)</span>
+        <h2>bias / variance / MSE จากการทำซ้ำหลายชุด</h2>
+        <p class="muted">ทำซ้ำ M ชุดข้อมูล เก็บค่าประมาณของแต่ละวิธี แล้วดูการกระจาย (histogram)
+          เทียบเส้นประ <b>E_out จริง</b> — กว้าง = variance สูง, เยื้องจากเส้นประ = bias</p>
+        <div class="grid2" style="margin-top:16px">
+          <div class="chart-card">
+            <p class="chart-title">model = constant</p>
+            <canvas id="cv-b-const" width="600" height="360"></canvas>
+          </div>
+          <div class="chart-card">
+            <p class="chart-title">model = linear</p>
+            <canvas id="cv-b-lin" width="600" height="360"></canvas>
+          </div>
+        </div>
+        <div class="legend" style="margin:14px 0 4px;justify-content:center">
+          <span><span class="swatch" style="background:var(--resub)"></span>resub</span>
+          <span><span class="swatch" style="background:var(--holdout)"></span>holdout</span>
+          <span><span class="swatch" style="background:var(--kfold)"></span>kfold</span>
+          <span><span class="swatch" style="background:var(--true);width:16px;height:3px"></span>true E_out</span>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl-b">
+            <thead><tr><th>model · method</th><th>bias</th><th>variance</th><th>MSE</th><th>bias²+var</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="note">ตรวจความถูกต้อง: ทุกแถว <b>MSE ≈ bias² + variance</b> (ยืนยันการ decompose).
+          ทิศทางที่ควรเห็น — resub: bias ลบ / var ต่ำ · holdout: bias≈0 / var สูงสุด · kfold: bias≈0 / var ต่ำกว่า holdout</div>
+      </section>
+
+      <!-- ===== part c ===== -->
+      <section id="part-c">
+        <span class="tag">หัวข้อ (c)</span>
+        <h2>เปลี่ยนสัดส่วน holdout และจำนวน fold k</h2>
+        <p class="muted">ใช้ model = linear กวาดค่า ratio และ k เพื่อดูว่าแบบใดให้ค่าประมาณ “นิ่ง” (variance ต่ำ) กว่า.
+          ส่วนนี้คำนวณหนัก จึงกดปุ่มรันเอง</p>
+        <div style="display:flex;gap:14px;align-items:center;margin:8px 0 18px">
+          <button class="btn" id="btn-c">▶ รันหัวข้อ (c)</button>
+          <span class="status" id="stat-c"></span>
+        </div>
+        <div class="grid2">
+          <div class="chart-card">
+            <p class="chart-title">holdout: variance ของค่าประมาณ vs test ratio</p>
+            <canvas id="cv-c1" width="600" height="340"></canvas>
+          </div>
+          <div class="chart-card">
+            <p class="chart-title">k-fold: variance ของค่าประมาณ vs จำนวน fold</p>
+            <canvas id="cv-c2" width="600" height="340"></canvas>
+          </div>
+        </div>
+        <div class="tbl-wrap grid2" style="align-items:start">
+          <table id="tbl-c1"><thead><tr><th>ratio</th><th>bias</th><th>variance</th></tr></thead><tbody></tbody></table>
+          <table id="tbl-c2"><thead><tr><th>k</th><th>bias</th><th>variance</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="note">แนวโน้ม: test set ใหญ่ขึ้น / k มากขึ้น → variance มักลดลง.
+          k-fold (โดยเฉพาะ k=5–10) ให้ค่าประมาณแม่น/นิ่งกว่า holdout</div>
+      </section>
+
+      <!-- ===== part d ===== -->
+      <section id="part-d">
+        <span class="tag">หัวข้อ (d)</span>
+        <h2>ปรับ n และ σ</h2>
+        <p class="muted">ใช้ model = linear กวาด n = [10, 20, 50, 100] × σ = [0.1, 0.3, 0.5]
+          ดูผลต่อ variance ของ k-fold และ bias ของ resub</p>
+        <div style="display:flex;gap:14px;align-items:center;margin:8px 0 18px">
+          <button class="btn" id="btn-d">▶ รันหัวข้อ (d)</button>
+          <span class="status" id="stat-d"></span>
+        </div>
+        <div class="grid2">
+          <div class="chart-card">
+            <p class="chart-title">k-fold: variance ของค่าประมาณ vs n (เส้นละ σ)</p>
+            <canvas id="cv-d" width="600" height="360"></canvas>
+            <div class="legend" id="leg-d"></div>
+          </div>
+          <div class="tbl-wrap card">
+            <table id="tbl-d">
+              <thead><tr><th>n</th><th>σ</th><th>resub bias</th><th>holdout var</th><th>kfold var</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="note">แนวโน้ม: <b>n มากขึ้น → variance ทุกวิธีลดลง</b> (ข้อมูลเยอะ ประมาณนิ่งขึ้น);
+          <b>σ มากขึ้น → variance เพิ่ม</b> และ resub ยิ่งมองโลกแง่ดี (bias ติดลบมากขึ้น)</div>
+      </section>
+
+      <!-- ===== summary ===== -->
+      <section id="summary">
+        <span class="tag">สรุปบทเรียน</span>
+        <h2>เลือกตัวประมาณอย่างไรดี?</h2>
+        <div class="grid3">
+          <div class="card" style="border-top:3px solid var(--resub)">
+            <h3><span class="pill p-resub">resubstitution</span></h3>
+            <p style="font-size:14.5px">เอนเอียงต่ำ <b>(มองโลกแง่ดี)</b> variance ต่ำ<br>
+              <span style="color:#ff8a86">✗ ห้ามใช้ประเมินสมรรถนะจริง</span></p>
+          </div>
+          <div class="card" style="border-top:3px solid var(--holdout)">
+            <h3><span class="pill p-hold">holdout</span></h3>
+            <p style="font-size:14.5px">แทบไม่เอนเอียง แต่ <b>variance สูง</b> —
+              ขึ้นกับว่าแบ่ง/สุ่มได้ชุดไหน</p>
+          </div>
+          <div class="card" style="border-top:3px solid var(--kfold)">
+            <h3><span class="pill p-kf">k-fold CV</span></h3>
+            <p style="font-size:14.5px">ไม่เอนเอียงมาก และ <b>variance ต่ำกว่า holdout</b><br>
+              <span style="color:#71d3a3">✓ ตัวเลือกที่ดีที่สุด</span></p>
+          </div>
+        </div>
+        <div class="note" style="margin-top:22px">ยิ่งข้อมูลน้อย / noise มาก / โมเดลยืดหยุ่นสูง →
+          การประมาณ E_out ยิ่งยากและแปรปรวนมากขึ้น</div>
+      </section>
+
+      <div class="foot">
+        พอร์ตจาก <code>perf_estimators.py</code> + <code>models.py</code> · f(x)=sin(πx) ·
+        คำนวณทั้งหมดในเบราว์เซอร์ (self-contained) ·
+        <span class="kbd">←</span><span class="kbd">→</span> เลื่อนสไลเดอร์ค่าที่โฟกัสได้
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   1) แกนคำนวณ — พอร์ต 1:1 จาก perf_estimators.py / models.py
+   ========================================================================= */
+
+// ---- RNG แบบ seed ได้ (mulberry32) + Box–Muller สำหรับ normal ----
+function makeRng(seed){
+  let s = seed >>> 0;
+  const uniform01 = () => {                    // [0,1)
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let spare = null;
+  return {
+    uniform: (a, b) => a + (b - a) * uniform01(),          // U[a,b]
+    normal: () => {                                        // N(0,1) Box–Muller
+      if (spare !== null){ const v = spare; spare = null; return v; }
+      let u1 = 0, u2 = 0;
+      do { u1 = uniform01(); } while (u1 <= 1e-12);
+      u2 = uniform01();
+      const mag = Math.sqrt(-2 * Math.log(u1));
+      spare = mag * Math.sin(2 * Math.PI * u2);
+      return mag * Math.cos(2 * Math.PI * u2);
+    }
+  };
+}
+
+const TARGET = (x) => Math.sin(Math.PI * x);              // f(x)=sin(pi*x)
+
+// กริดถี่ 1001 จุดบน [-1,1] ไว้คำนวณ E_out จริง (คำนวณ f ล่วงหน้า)
+const GRID = (() => {
+  const g = new Float64Array(1001), f = new Float64Array(1001);
+  for (let i = 0; i < 1001; i++){ const x = -1 + 2 * i / 1000; g[i] = x; f[i] = TARGET(x); }
+  return { x: g, f };
+})();
+
+// predict: theta = สปส.พหุนามดีกรีสูงสุดก่อน (เหมือน np.polyval) — Horner
+function predict(theta, x){
+  let r = theta[0];
+  for (let i = 1; i < theta.length; i++) r = r * x + theta[i];
+  return r;
+}
+
+// fit_const: ค่าเฉลี่ยของ y -> [0, mean]
+function fitConst(x, y){
+  let s = 0; for (let i = 0; i < y.length; i++) s += y[i];
+  return [0, s / y.length];
+}
+
+// fit_linear: least squares -> [a, b] (h(x)=a*x+b)
+function fitLinear(x, y){
+  const n = x.length;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = 0; i < n; i++){ sx += x[i]; sy += y[i]; sxx += x[i]*x[i]; sxy += x[i]*y[i]; }
+  const den = n * sxx - sx * sx;
+  if (Math.abs(den) < 1e-12) return [0, sy / n];          // กันหารศูนย์ (x ซ้ำกันหมด)
+  const a = (n * sxy - sx * sy) / den;
+  const b = (sy - a * sx) / n;
+  return [a, b];
+}
+
+const MODELS = { constant: fitConst, linear: fitLinear };
+
+// make_data: x~U[-1,1] n จุด, y=f(x)+noise
+function makeData(n, sigma, rng){
+  const x = new Float64Array(n), y = new Float64Array(n);
+  for (let i = 0; i < n; i++){ x[i] = rng.uniform(-1, 1); y[i] = TARGET(x[i]) + sigma * rng.normal(); }
+  return { x, y };
+}
+
+// true_eout = mean((g-f)^2 บนกริด) + sigma^2
+function trueEout(theta, sigma){
+  let s = 0;
+  for (let i = 0; i < 1001; i++){ const d = predict(theta, GRID.x[i]) - GRID.f[i]; s += d * d; }
+  return s / 1001 + sigma * sigma;
+}
+
+function mse(theta, x, y){
+  let s = 0; for (let i = 0; i < x.length; i++){ const d = predict(theta, x[i]) - y[i]; s += d * d; }
+  return s / x.length;
+}
+
+// est_resub
+function estResub(x, y, fit){ return mse(fit(x, y), x, y); }
+
+// สับดัชนี 0..n-1 (Fisher–Yates ด้วย rng)
+function permutation(n, rng){
+  const idx = new Int32Array(n); for (let i = 0; i < n; i++) idx[i] = i;
+  for (let i = n - 1; i > 0; i--){ const j = Math.floor(rng.uniform(0, i + 1)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+  return idx;
+}
+function subset(arr, idx, from, to){
+  const out = new Float64Array(to - from);
+  for (let i = from; i < to; i++) out[i - from] = arr[idx[i]];
+  return out;
+}
+
+// est_holdout: สุ่มแบ่ง train/test ตาม ratio (สัดส่วน test)
+function estHoldout(x, y, fit, ratio, rng){
+  const n = x.length;
+  const idx = permutation(n, rng);
+  let nTest = Math.max(1, Math.round(ratio * n));
+  if (nTest >= n) nTest = n - 1;                          // เหลือ train อย่างน้อย 1
+  const xTest = subset(x, idx, 0, nTest), yTest = subset(y, idx, 0, nTest);
+  const xTrain = subset(x, idx, nTest, n), yTrain = subset(y, idx, nTest, n);
+  return mse(fit(xTrain, yTrain), xTest, yTest);
+}
+
+// array_split เหมือน numpy: แบ่ง n เป็น k ก้อนขนาดใกล้เคียง
+function arraySplit(idx, k){
+  const n = idx.length, base = Math.floor(n / k), rem = n % k, folds = [];
+  let p = 0;
+  for (let i = 0; i < k; i++){ const size = base + (i < rem ? 1 : 0); folds.push(idx.slice(p, p + size)); p += size; }
+  return folds;
+}
+
+// est_kfold
+function estKfold(x, y, fit, k, rng){
+  const n = x.length;
+  const kk = Math.min(k, n);
+  const folds = arraySplit(permutation(n, rng), kk);
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < kk; i++){
+    const test = folds[i];
+    if (test.length === 0) continue;
+    const trainLen = n - test.length;
+    const xTr = new Float64Array(trainLen), yTr = new Float64Array(trainLen);
+    let p = 0;
+    for (let j = 0; j < kk; j++){ if (j === i) continue; const fj = folds[j];
+      for (let t = 0; t < fj.length; t++){ xTr[p] = x[fj[t]]; yTr[p] = y[fj[t]]; p++; } }
+    const theta = fit(xTr, yTr);
+    let s = 0; for (let t = 0; t < test.length; t++){ const d = predict(theta, x[test[t]]) - y[test[t]]; s += d * d; }
+    sum += s / test.length; cnt++;
+  }
+  return sum / cnt;
+}
+
+// run_trials: ทำซ้ำ M ชุด คืน {resub,hold,kf,true} เป็น Float64Array
+function runTrials(fit, n, sigma, ratio, k, rng, M){
+  const resub = new Float64Array(M), hold = new Float64Array(M), kf = new Float64Array(M), tru = new Float64Array(M);
+  for (let m = 0; m < M; m++){
+    const { x, y } = makeData(n, sigma, rng);
+    resub[m] = estResub(x, y, fit);
+    hold[m]  = estHoldout(x, y, fit, ratio, rng);
+    kf[m]    = estKfold(x, y, fit, k, rng);
+    tru[m]   = trueEout(fit(x, y), sigma);
+  }
+  return { resub, hold, kf, true: tru };
+}
+
+const mean = (a) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; };
+const variance = (a) => { const mu = mean(a); let s = 0; for (let i = 0; i < a.length; i++){ const d = a[i] - mu; s += d * d; } return s / a.length; };
+
+// stats_vs_true -> {bias, var, mse}
+function statsVsTrue(est, tru){
+  const bias = mean(est) - mean(tru);
+  const v = variance(est);
+  let m = 0; for (let i = 0; i < est.length; i++){ const d = est[i] - tru[i]; m += d * d; }
+  return { bias, var: v, mse: m / est.length };
+}
+
+/* =========================================================================
+   2) ตัวช่วยวาดกราฟบน canvas (self-contained, HiDPI)
+   ========================================================================= */
+const COL = { resub:'#ef5350', holdout:'#4caf7d', kfold:'#5b8def', true:'#e8ecff',
+              ink:'#e8ecff', muted:'#9aa3c7', grid:'#2b3252', panel:'#181c2e' };
+const DLINE = ['#5b8def', '#e0b23a', '#4caf7d', '#ef5350']; // เส้นหลายชุด (part d)
+
+function setupCanvas(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = cv.clientWidth || cv.width;
+  const cssH = parseInt(cv.getAttribute('height'), 10);
+  cv.width = Math.round(cssW * dpr);
+  cv.height = Math.round(cssH * dpr);
+  cv.style.height = cssH + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  return { ctx, W: cssW, H: cssH };
+}
+
+function axes(ctx, pad, W, H, xr, yr, xlab, ylab, opt){
+  opt = opt || {};
+  const [x0, x1] = xr, [y0, y1] = yr;
+  const px = (x) => pad.l + (x - x0) / (x1 - x0) * (W - pad.l - pad.r);
+  const yLog = opt.yLog;
+  const yv = (y) => yLog ? Math.log10(Math.max(y, 1e-12)) : y;
+  const yl0 = yv(y0), yl1 = yv(y1);
+  const py = (y) => H - pad.b - (yv(y) - yl0) / (yl1 - yl0) * (H - pad.t - pad.b);
+  ctx.strokeStyle = COL.grid; ctx.fillStyle = COL.muted; ctx.lineWidth = 1;
+  ctx.font = '11px ui-monospace,monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const ticks = opt.yticks || 5;
+  for (let i = 0; i <= ticks; i++){
+    const yy = yl0 + (yl1 - yl0) * i / ticks;
+    const val = yLog ? Math.pow(10, yy) : yy;
+    const Y = py(val);
+    ctx.globalAlpha = .5; ctx.beginPath(); ctx.moveTo(pad.l, Y); ctx.lineTo(W - pad.r, Y); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillText(fmtTick(val), pad.l - 6, Y);
+  }
+  // แกน x
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  if (opt.xcat){                                          // แกนหมวดหมู่ (label เอง)
+    opt.xcat.forEach((lab, i) => {
+      const X = px(opt.xvals ? opt.xvals[i] : i);
+      ctx.fillText(String(lab), X, H - pad.b + 6);
+    });
+  } else {
+    const xt = opt.xticks || 5;
+    for (let i = 0; i <= xt; i++){ const xx = x0 + (x1 - x0) * i / xt; ctx.fillText(fmtTick(xx), px(xx), H - pad.b + 6); }
+  }
+  ctx.strokeStyle = COL.muted; ctx.globalAlpha = .8;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
+  ctx.globalAlpha = 1;
+  // ป้ายแกน
+  ctx.fillStyle = COL.muted; ctx.font = '12px ui-monospace,monospace';
+  ctx.textAlign = 'center'; ctx.fillText(xlab, (pad.l + W - pad.r) / 2, H - 14);
+  ctx.save(); ctx.translate(14, (pad.t + H - pad.b) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText(ylab, 0, 0); ctx.restore();
+  return { px, py };
+}
+function fmtTick(v){
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1000 || a < 0.001) return v.toExponential(0);
+  if (a < 1) return v.toFixed(a < 0.01 ? 3 : (a < 0.1 ? 3 : 2));
+  return (Math.round(v * 100) / 100).toString();
+}
+
+// ---- histogram ซ้อนหลายชุด + เส้นแนวตั้ง ----
+function drawHist(cv, series, vline){
+  const { ctx, W, H } = setupCanvas(cv);
+  const pad = { l: 46, r: 12, t: 12, b: 40 };
+  let lo = Infinity, hi = -Infinity;
+  series.forEach(s => s.data.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; }));
+  if (vline != null){ lo = Math.min(lo, vline); hi = Math.max(hi, vline); }
+  if (!(hi > lo)){ hi = lo + 1; }
+  const pad2 = (hi - lo) * 0.04; lo -= pad2; hi += pad2;
+  const BINS = 40, bw = (hi - lo) / BINS;
+  let ymax = 0;
+  const hists = series.map(s => {
+    const c = new Int32Array(BINS);
+    s.data.forEach(v => { let b = Math.floor((v - lo) / bw); if (b < 0) b = 0; if (b >= BINS) b = BINS - 1; c[b]++; });
+    for (let i = 0; i < BINS; i++) if (c[i] > ymax) ymax = c[i];
+    return c;
+  });
+  ymax *= 1.08;
+  const { px, py } = axes(ctx, pad, W, H, [lo, hi], [0, ymax], 'estimated E_out', 'frequency');
+  series.forEach((s, si) => {
+    ctx.fillStyle = s.color; ctx.globalAlpha = 0.45;
+    const h = hists[si];
+    for (let b = 0; b < BINS; b++){
+      if (h[b] === 0) continue;
+      const x = px(lo + b * bw), x2 = px(lo + (b + 1) * bw), y = py(h[b]), y0 = py(0);
+      ctx.fillRect(x, y, Math.max(1, x2 - x - 0.5), y0 - y);
+    }
+  });
+  ctx.globalAlpha = 1;
+  if (vline != null){                                     // เส้นประ true E_out
+    const X = px(vline);
+    ctx.strokeStyle = COL.true; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(X, pad.t); ctx.lineTo(X, H - pad.b); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+// ---- line chart หลายชุด (มาร์ก + เส้น) ----
+function drawLines(cv, lines, opt){
+  opt = opt || {};
+  const { ctx, W, H } = setupCanvas(cv);
+  const pad = { l: 62, r: 14, t: 14, b: 42 };
+  let xlo = Infinity, xhi = -Infinity, ylo = Infinity, yhi = -Infinity;
+  lines.forEach(L => L.pts.forEach(p => {
+    if (p[0] < xlo) xlo = p[0]; if (p[0] > xhi) xhi = p[0];
+    if (p[1] < ylo) ylo = p[1]; if (p[1] > yhi) yhi = p[1];
+  }));
+  if (opt.yLog){ ylo = Math.max(ylo, 1e-9); yhi *= 1.4; ylo *= 0.7; }
+  else { const m = (yhi - ylo) * 0.12 || yhi * 0.12 || 1; ylo = Math.max(0, ylo - m); yhi += m; }
+  if (opt.xcat){ xlo -= 0.4; xhi += 0.4; }
+  else { const mx = (xhi - xlo) * 0.06 || 1; xlo -= mx; xhi += mx; }
+  const { px, py } = axes(ctx, pad, W, H, [xlo, xhi], [ylo, yhi], opt.xlab || 'x', opt.ylab || 'y',
+    { yLog: opt.yLog, xcat: opt.xcat, xvals: opt.xvals, xticks: opt.xticks });
+  lines.forEach(L => {
+    ctx.strokeStyle = L.color; ctx.fillStyle = L.color; ctx.lineWidth = 2;
+    ctx.beginPath();
+    L.pts.forEach((p, i) => { const X = px(p[0]), Y = py(p[1]); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+    ctx.stroke();
+    L.pts.forEach(p => { ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 4, 0, 2 * Math.PI); ctx.fill(); });
+  });
+}
+
+// ---- scatter (part a): จุดข้อมูล + เส้น f จริง + เส้นโมเดล ----
+function drawScatter(cv, data, thetaLin){
+  const { ctx, W, H } = setupCanvas(cv);
+  const pad = { l: 46, r: 12, t: 12, b: 40 };
+  let ylo = -1.4, yhi = 1.4;
+  data.y.forEach(v => { if (v < ylo) ylo = v - .1; if (v > yhi) yhi = v + .1; });
+  const { px, py } = axes(ctx, pad, W, H, [-1, 1], [ylo, yhi], 'x', 'y', { xticks: 4 });
+  // เส้น f จริง
+  ctx.strokeStyle = COL.true; ctx.lineWidth = 2; ctx.globalAlpha = .85; ctx.beginPath();
+  for (let i = 0; i <= 200; i++){ const x = -1 + 2 * i / 200; const X = px(x), Y = py(TARGET(x)); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+  ctx.stroke(); ctx.globalAlpha = 1;
+  // เส้นโมเดล linear
+  ctx.strokeStyle = COL.kfold; ctx.lineWidth = 2.5; ctx.beginPath();
+  for (let i = 0; i <= 60; i++){ const x = -1 + 2 * i / 60; const X = px(x), Y = py(predict(thetaLin, x)); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+  ctx.stroke();
+  // จุดข้อมูล
+  ctx.fillStyle = COL.muted;
+  for (let i = 0; i < data.x.length; i++){ ctx.beginPath(); ctx.arc(px(data.x[i]), py(data.y[i]), 3, 0, 2 * Math.PI); ctx.fill(); }
+}
+
+/* =========================================================================
+   3) เชื่อมกับ UI
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+const DEFAULTS = { n:40, sig:0.3, ratio:0.3, k:5, m:800, seed:42 };
+const els = {
+  n:$('c-n'), sig:$('c-sig'), ratio:$('c-ratio'), k:$('c-k'), m:$('c-m'), seed:$('c-seed'),
+  lbN:$('lb-n'), lbSig:$('lb-sig'), lbRatio:$('lb-ratio'), lbK:$('lb-k'), lbM:$('lb-m')
+};
+function readParams(){
+  return {
+    n:+els.n.value, sigma:+els.sig.value, ratio:+els.ratio.value,
+    k:+els.k.value, M:+els.m.value, seed:+els.seed.value|0
+  };
+}
+function syncLabels(){
+  els.lbN.textContent = els.n.value;
+  els.lbSig.textContent = (+els.sig.value).toFixed(2);
+  els.lbRatio.textContent = (+els.ratio.value).toFixed(2);
+  els.lbK.textContent = els.k.value;
+  els.lbM.textContent = els.m.value;
+}
+const f4 = (v) => v.toFixed(4);
+const f5 = (v) => v.toFixed(5);
+const signed = (v) => (v >= 0 ? '+' : '') + v.toFixed(4);
+function cls(v){ return v < 0 ? 'neg' : 'pos'; }
+
+// ---------- (a) + (b) : เบา อัปเดตอัตโนมัติ ----------
+function runAB(){
+  const P = readParams();
+
+  // (a) ข้อมูลชุดเดียว — ใช้ rng seed เดียว วนทั้ง 2 โมเดล (เหมือน part_a ที่สุ่มใหม่ต่อโมเดล)
+  const rngA = makeRng(P.seed);
+  const tb = $('tbl-a').querySelector('tbody'); tb.innerHTML = '';
+  let firstLinData = null, firstLinTheta = null;
+  for (const name of ['constant', 'linear']){
+    const fit = MODELS[name];
+    const d = makeData(P.n, P.sigma, rngA);
+    const r = estResub(d.x, d.y, fit);
+    const h = estHoldout(d.x, d.y, fit, P.ratio, rngA);
+    const cv = estKfold(d.x, d.y, fit, P.k, rngA);
+    const theta = fit(d.x, d.y);
+    const t = trueEout(theta, P.sigma);
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${name}</td><td>${f4(r)}</td><td>${f4(h)}</td><td>${f4(cv)}</td><td>${f4(t)}</td></tr>`);
+    if (name === 'linear'){ firstLinData = d; firstLinTheta = theta; }
+  }
+  drawScatter($('cv-a'), firstLinData, firstLinTheta);
+
+  // (b) ทำซ้ำ M ชุด — rng seed เดียวกันวนทั้ง 2 โมเดล (เหมือน part_b)
+  const rngB = makeRng(P.seed);
+  const tbB = $('tbl-b').querySelector('tbody'); tbB.innerHTML = '';
+  const targets = [['constant', $('cv-b-const')], ['linear', $('cv-b-lin')]];
+  for (const [name, cv] of targets){
+    const fit = MODELS[name];
+    const res = runTrials(fit, P.n, P.sigma, P.ratio, P.k, rngB, P.M);
+    const trueMean = mean(res.true);
+    drawHist(cv, [
+      { data: res.resub, color: COL.resub },
+      { data: res.hold,  color: COL.holdout },
+      { data: res.kf,    color: COL.kfold }
+    ], trueMean);
+    const rows = [['resub', res.resub], ['holdout', res.hold], ['kfold', res.kf]];
+    rows.forEach(([m, est], i) => {
+      const s = statsVsTrue(est, res.true);
+      tbB.insertAdjacentHTML('beforeend',
+        `<tr><td>${i === 0 ? '<b>' + name + '</b> · ' : '&nbsp;&nbsp;· '}${m}</td>`+
+        `<td class="${cls(s.bias)}">${signed(s.bias)}</td>`+
+        `<td>${f5(s.var)}</td><td>${f5(s.mse)}</td><td>${f5(s.bias*s.bias + s.var)}</td></tr>`);
+    });
+  }
+}
+
+// ---------- (c) : หนัก กดปุ่มเอง ----------
+function runC(){
+  const P = readParams();
+  const fit = MODELS.linear;
+  const ratios = [0.2, 0.3, 0.5, 0.7];
+  const ks = [2, 5, 10, P.n];
+  const stat = $('stat-c'); const btn = $('btn-c');
+  btn.disabled = true; stat.textContent = 'กำลังคำนวณ...';
+  const holdVar = [], holdRows = [], kfVar = [], kfRows = [];
+
+  // แบ่งงานเป็นสเต็ปกันหน้าค้าง
+  const jobs = [];
+  ratios.forEach(r => jobs.push(() => {
+    const rng = makeRng(P.seed);
+    const res = runTrials(fit, P.n, P.sigma, r, P.k, rng, P.M);
+    const s = statsVsTrue(res.hold, res.true);
+    holdVar.push([r, s.var]); holdRows.push([r, s.bias, s.var]);
+  }));
+  ks.forEach(k => jobs.push(() => {
+    const rng = makeRng(P.seed);
+    const res = runTrials(fit, P.n, P.sigma, P.ratio, k, rng, P.M);
+    const s = statsVsTrue(res.kf, res.true);
+    kfVar.push([k, s.var]); kfRows.push([k, s.bias, s.var]);
+  }));
+
+  runJobs(jobs, stat, () => {
+    drawLines($('cv-c1'), [{ pts: holdVar, color: COL.holdout }],
+      { xlab: 'test ratio', ylab: 'variance', xticks: 4 });
+    drawLines($('cv-c2'), [{ pts: kfVar.map((p, i) => [i, p[1]]), color: COL.kfold }],
+      { xlab: 'k (folds)', ylab: 'variance', xcat: ks.map(String), xvals: ks.map((_, i) => i) });
+    fillRows('tbl-c1', holdRows.map(r => [r[0].toFixed(1), signed(r[1]), f5(r[2])]));
+    fillRows('tbl-c2', kfRows.map(r => [r[0], signed(r[1]), f5(r[2])]));
+    btn.disabled = false; stat.textContent = 'เสร็จแล้ว ✓';
+  });
+}
+
+// ---------- (d) : หนักสุด กดปุ่มเอง ----------
+function runD(){
+  const P = readParams();
+  const fit = MODELS.linear;
+  const ns = [10, 20, 50, 100];
+  const sigmas = [0.1, 0.3, 0.5];
+  const stat = $('stat-d'); const btn = $('btn-d');
+  btn.disabled = true; stat.textContent = 'กำลังคำนวณ...';
+  const rows = [];                                        // [n, sigma, resubBias, holdVar, kfVar]
+  const kfByN = {}; sigmas.forEach(s => kfByN[s] = []);
+
+  const jobs = [];
+  ns.forEach(n => sigmas.forEach(sigma => jobs.push(() => {
+    const rng = makeRng(P.seed);
+    const res = runTrials(fit, n, sigma, P.ratio, P.k, rng, P.M);
+    const rb = statsVsTrue(res.resub, res.true).bias;
+    const hv = variance(res.hold);
+    const kv = variance(res.kf);
+    rows.push([n, sigma, rb, hv, kv]);
+    kfByN[sigma].push([n, kv]);
+  })));
+
+  runJobs(jobs, stat, () => {
+    const lines = sigmas.map((s, i) => ({ pts: kfByN[s], color: DLINE[i], label: 'σ=' + s }));
+    drawLines($('cv-d'), lines, { xlab: 'n (sample size)', ylab: 'variance', yLog: true, xticks: 4 });
+    $('leg-d').innerHTML = lines.map(L =>
+      `<span><span class="swatch" style="background:${L.color}"></span>${L.label}</span>`).join('');
+    fillRows('tbl-d', rows.map(r =>
+      [r[0], r[1].toFixed(1), signed(r[2]), f5(r[3]), f5(r[4])]));
+    btn.disabled = false; stat.textContent = 'เสร็จแล้ว ✓';
+  });
+}
+
+// วนทำ jobs ทีละก้อนด้วย setTimeout เพื่อไม่ให้ UI ค้าง
+function runJobs(jobs, stat, done){
+  let i = 0;
+  const total = jobs.length;
+  function step(){
+    const t0 = performance.now();
+    while (i < total && performance.now() - t0 < 60){ jobs[i](); i++; }
+    if (i < total){ stat.textContent = `กำลังคำนวณ... ${Math.round(i / total * 100)}%`; setTimeout(step, 0); }
+    else done();
+  }
+  setTimeout(step, 0);
+}
+
+function fillRows(tblId, rows){
+  const tb = $(tblId).querySelector('tbody'); tb.innerHTML = '';
+  rows.forEach(r => tb.insertAdjacentHTML('beforeend',
+    '<tr>' + r.map((c, i) => {
+      const isNeg = typeof c === 'string' && c.startsWith('-') && i > 0;
+      return `<td class="${isNeg ? 'neg' : (typeof c === 'string' && c.startsWith('+') ? 'pos' : '')}">${c}</td>`;
+    }).join('') + '</tr>'));
+}
+
+/* ---------- event wiring ---------- */
+let abTimer = null;
+function scheduleAB(){ syncLabels(); clearTimeout(abTimer); abTimer = setTimeout(runAB, 120); }
+['n', 'sig', 'ratio', 'k', 'm'].forEach(key => els[key].addEventListener('input', scheduleAB));
+els.seed.addEventListener('change', scheduleAB);
+$('btn-run').addEventListener('click', () => { syncLabels(); runAB(); });
+$('btn-reset').addEventListener('click', () => {
+  els.n.value = DEFAULTS.n; els.sig.value = DEFAULTS.sig; els.ratio.value = DEFAULTS.ratio;
+  els.k.value = DEFAULTS.k; els.m.value = DEFAULTS.m; els.seed.value = DEFAULTS.seed;
+  syncLabels(); runAB();
+});
+$('btn-c').addEventListener('click', runC);
+$('btn-d').addEventListener('click', runD);
+
+// TOC active-highlight + redraw on resize
+const tocLinks = [...document.querySelectorAll('nav.toc a')];
+const secs = tocLinks.map(a => document.querySelector(a.getAttribute('href')));
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting){
+    const id = '#' + e.target.id;
+    tocLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+  }});
+}, { rootMargin: '-45% 0px -50% 0px' });
+secs.forEach(s => s && obs.observe(s));
+
+let rz = null;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(runAB, 200); });
+
+// เริ่มต้น
+syncLabels();
+runAB();
+</script>
+</body>
+</html>
