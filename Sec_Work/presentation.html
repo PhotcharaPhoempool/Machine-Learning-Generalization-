@@ -310,7 +310,7 @@ MSE = mean( (ค่าประมาณ − E_out จริง)² ) ≈ bias² 
         </div>
         <div class="grid2">
           <div class="chart-card">
-            <p class="chart-title">holdout: ค่าประมาณเฉลี่ย ± SD  vs  test ratio</p>
+            <p class="chart-title">holdout: ค่าประมาณเฉลี่ย ± SD  vs  train ratio</p>
             <canvas id="cv-c1" width="600" height="340"></canvas>
           </div>
           <div class="chart-card">
@@ -324,10 +324,11 @@ MSE = mean( (ค่าประมาณ − E_out จริง)² ) ≈ bias² 
           <span><span class="swatch" style="background:var(--true);width:16px;height:3px"></span>เส้นประ = E_out จริง (ระยะห่าง = bias)</span>
         </div>
         <div class="tbl-wrap grid2" style="align-items:start">
-          <table id="tbl-c1"><thead><tr><th>ratio</th><th>bias</th><th>variance</th></tr></thead><tbody></tbody></table>
+          <table id="tbl-c1"><thead><tr><th>train ratio</th><th>bias</th><th>variance</th></tr></thead><tbody></tbody></table>
           <table id="tbl-c2"><thead><tr><th>k</th><th>bias</th><th>variance</th></tr></thead><tbody></tbody></table>
         </div>
-        <div class="note">แนวโน้ม: test set ใหญ่ขึ้น / k มากขึ้น → variance มักลดลง.
+        <div class="note">แนวโน้ม: train ratio น้อยลง (test set ใหญ่ขึ้น) / k มากขึ้น → variance มักลดลง.
+          ทั้งสองกราฟ ยิ่งไปทางขวา = ข้อมูลเทรนมากขึ้น.
           k-fold (โดยเฉพาะ k=5–10) ให้ค่าประมาณแม่น/นิ่งกว่า holdout</div>
       </section>
 
@@ -877,7 +878,8 @@ function drawLines(cv, lines, opt){
   }));
   if (opt.yLog){ ylo = Math.max(ylo, 1e-9); yhi *= 1.4; ylo *= 0.7; }
   else { const m = (yhi - ylo) * 0.12 || yhi * 0.12 || 1; ylo = Math.max(0, ylo - m); yhi += m; }
-  if (opt.xcat){ xlo -= 0.4; xhi += 0.4; }
+  // xcat + xvals แบบ "ตัวเลขจริง" (เช่น n=10,20,50,100) → เว้นระยะตามสัดส่วนจริง แล้ววาง tick ที่ค่านั้น ๆ
+  if (opt.xcat && !opt.xvals){ xlo -= 0.4; xhi += 0.4; }
   else { const mx = (xhi - xlo) * 0.06 || 1; xlo -= mx; xhi += mx; }
   const { px, py } = axes(ctx, pad, W, H, [xlo, xhi], [ylo, yhi], opt.xlab || 'x', opt.ylab || 'y',
     { yLog: opt.yLog, xcat: opt.xcat, xvals: opt.xvals, xticks: opt.xticks });
@@ -1054,11 +1056,14 @@ function runC(){
   }));
 
   runJobs(jobs, stat, () => {
-    drawBand($('cv-c1'), holdBand, trueMean,
-      { xlab: 'test ratio', ylab: 'E_out ประมาณ', color: COL.holdout, xticks: 4 });
+    // แกน X ของ holdout ใช้ "train ratio" (=1−test ratio) เรียงน้อย→มาก ให้ทิศทาง "ข้อมูลเทรนมากขึ้น" ตรงกับกราฟ k-fold
+    const holdBandTrain = holdBand.map(p => [1 - p[0], p[1], p[2]]).sort((a, b) => a[0] - b[0]);
+    drawBand($('cv-c1'), holdBandTrain, trueMean,
+      { xlab: 'train ratio', ylab: 'E_out ประมาณ', color: COL.holdout, xticks: 4 });
     drawBand($('cv-c2'), kfBand.map((p, i) => [i, p[1], p[2]]), trueMean,
       { xlab: 'k (folds)', ylab: 'E_out ประมาณ', color: COL.kfold, xcat: ks.map(String), xvals: ks.map((_, i) => i) });
-    fillRows('tbl-c1', holdRows.map(r => [r[0].toFixed(1), signed(r[1]), f5(r[2])]));
+    fillRows('tbl-c1', holdRows.map(r => [1 - r[0], r[1], r[2]]).sort((a, b) => a[0] - b[0])
+      .map(r => [r[0].toFixed(1), signed(r[1]), f5(r[2])]));
     fillRows('tbl-c2', kfRows.map(r => [r[0], signed(r[1]), f5(r[2])]));
     btn.disabled = false; stat.textContent = 'เสร็จแล้ว ✓';
   });
@@ -1088,7 +1093,8 @@ function runD(){
 
   runJobs(jobs, stat, () => {
     const lines = sigmas.map((s, i) => ({ pts: kfByN[s], color: DLINE[i], label: 'σ=' + s }));
-    drawLines($('cv-d'), lines, { xlab: 'n (sample size)', ylab: 'variance', yLog: true, xticks: 4 });
+    drawLines($('cv-d'), lines, { xlab: 'n (sample size)', ylab: 'variance', yLog: true,
+      xcat: ns.map(String), xvals: ns });   // วาง tick แกน X ที่ค่า n จริง (10, 20, 50, 100)
     $('leg-d').innerHTML = lines.map(L =>
       `<span><span class="swatch" style="background:${L.color}"></span>${L.label}</span>`).join('');
     fillRows('tbl-d', rows.map(r =>
