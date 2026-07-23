@@ -24,10 +24,10 @@ if hasattr(sys.stdout, "reconfigure"):
 
 # ---------- ค่าคงที่รวมบนสุด (สไตล์ C: ตัวแปรที่ใช้ซ้ำ/ใช้เยอะอยู่ที่เดียว) ----------
 SEED = 42                                          # seed ตัวสุ่ม (ผลซ้ำได้ทุกครั้ง)
-N = 15                                             # จำนวนตัวอย่าง n เริ่มต้น
+N = 10                                             # จำนวนตัวอย่าง n เริ่มต้น
 SIGMA = 0.3                                         # ค่าเบี่ยงเบนมาตรฐานของ noise เริ่มต้น
 MAXDEG = 10                                         # ดีกรีสูงสุด D (จะกวาด d = 0..D)
-K_FOLD = 5                                          # จำนวน fold ของ cross-validation
+K_FOLD = 10                                          # จำนวน fold ของ cross-validation
 M_DATASETS = 300                                    # จำนวนชุดข้อมูลที่ทำซ้ำ (Monte Carlo)
 GRID = np.linspace(-1, 1, 1001)                    # กริด x ถี่ ๆ ไว้คำนวณ E_out จริง
 
